@@ -1,0 +1,23 @@
+{
+  "name": "naradie-eshop",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Interny objednavkovy system naradia (NSK) - eshop pre vyrobu, sklad, dodavatelia, signalna zasoba",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "reset": "node src/reset.js",
+    "import": "node src/import/index.js"
+  },
+  "dependencies": {
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "multer": "^2.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=23.4"
+  }
+}

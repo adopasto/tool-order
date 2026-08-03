@@ -1,0 +1,6 @@
+<%# Miniatúra položky. path = image_path alebo null, kod = kód položky. %>
+<% if (path) { %>
+  <img class="mini" src="<%= base %>/foto/<%= encodeURIComponent(path) %>" alt="" loading="lazy">
+<% } else { %>
+  <span class="mini mini-nic"><%= kod.slice(0, 3) %></span>
+<% } %>

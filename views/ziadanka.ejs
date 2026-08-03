@@ -1,0 +1,108 @@
+<%- include('partials/head', { title: z.number, nav: 'ziadanky' }) %>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+  <div>
+    <div class="eyebrow">Žiadanka</div>
+    <h1><%= z.number %></h1>
+  </div>
+  <span class="stav <%= z.status %>" style="font-size:12px;padding:6px 12px"><%= STAV_LABEL[z.status] %></span>
+</div>
+
+<div class="panel" style="margin:14px 0 20px">
+  <div class="panel-b">
+    <dl class="kv">
+      <dt>Žiadateľ</dt><dd><%= z.ziadatel %> <span style="color:var(--steel)">(<%= z.ziadatel_email || '—' %>)</span></dd>
+      <dt>Stredisko</dt><dd><%= z.cost_center || '—' %></dd>
+      <dt>Vytvorené</dt><dd class="mono"><%= z.created_at %></dd>
+      <% if (z.schvalil) { %><dt>Rozhodol</dt><dd><%= z.schvalil %> · <%= z.approved_at %></dd><% } %>
+      <% if (z.note) { %><dt>Poznámka</dt><dd><%= z.note %></dd><% } %>
+      <% if (z.reject_note) { %><dt>Dôvod zamietnutia</dt><dd><%= z.reject_note %></dd><% } %>
+    </dl>
+  </div>
+</div>
+
+<% const vydajMozny = ['SCHVALENA','CAKA_NA_TOVAR','CIASTOCNE_VYDANA'].includes(z.status)
+                      && ['storekeeper','admin'].includes(user.role); %>
+
+<form method="post" action="<%= base %>/ziadanky/<%= z.id %>/vydat">
+<div class="panel">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width:56px"></th>
+        <th style="width:96px">Kód</th>
+        <th>Položka</th>
+        <th style="width:70px">Regál</th>
+        <th class="num" style="width:90px">Požadované</th>
+        <th class="num" style="width:80px">Vydané</th>
+        <th class="num" style="width:90px">Na sklade</th>
+        <% if (vydajMozny) { %><th style="width:110px">Vydať teraz</th><% } %>
+      </tr>
+    </thead>
+    <tbody>
+    <% riadky.forEach(r => {
+         const zostava = r.qty_requested - r.qty_issued;
+         const kryte = Math.min(zostava, r.stock_qty); %>
+      <tr>
+        <td><%- include('partials/mini', { path: r.image_path, kod: r.code }) %></td>
+        <td class="mono"><%= r.code %></td>
+        <td>
+          <%= r.name %>
+          <% if (r.bundle_code) { %>
+            <div style="font-size:11.5px;color:var(--steel)">z balíka <%= r.bundle_code %> – <%= r.bundle_name %></div>
+          <% } %>
+        </td>
+        <td class="mono" style="font-size:12px"><%= r.location || '—' %></td>
+        <td class="num"><%= r.qty_requested %> <%= r.unit %></td>
+        <td class="num"><%= r.qty_issued %></td>
+        <td class="num" style="color:<%= r.stock_qty < zostava ? 'var(--zero)' : 'inherit' %>"><%= r.stock_qty %></td>
+        <% if (vydajMozny) { %>
+          <td>
+            <% if (zostava > 0) { %>
+              <input type="number" name="qty_<%= r.id %>" value="<%= kryte > 0 ? kryte : 0 %>"
+                     min="0" max="<%= Math.min(zostava, r.stock_qty) %>" step="1">
+            <% } else { %>
+              <span class="tag ok">vydané</span>
+            <% } %>
+          </td>
+        <% } %>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+  <% if (vydajMozny) { %>
+    <button class="btn" type="submit">Zaevidovať výdaj</button>
+  <% } %>
+</div>
+</form>
+
+<% if (z.status === 'NOVA' && ['approver','admin'].includes(user.role)) { %>
+  <div class="panel" style="margin-top:20px;max-width:620px">
+    <div class="panel-h">Rozhodnutie schvaľovateľa</div>
+    <div class="panel-b">
+      <form method="post" action="<%= base %>/ziadanky/<%= z.id %>/schvalit" style="display:inline">
+        <button class="btn" type="submit">Schváliť</button>
+      </form>
+      <form method="post" action="<%= base %>/ziadanky/<%= z.id %>/zamietnut" style="margin-top:14px">
+        <div class="field">
+          <label for="duvod">Dôvod zamietnutia</label>
+          <input type="text" id="duvod" name="duvod" placeholder="Napr. na linke je ešte dostatok kusov">
+        </div>
+        <button class="btn warn" type="submit">Zamietnuť</button>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<% if (['NOVA','SCHVALENA','CAKA_NA_TOVAR'].includes(z.status)) { %>
+  <form method="post" action="<%= base %>/ziadanky/<%= z.id %>/storno" style="margin-top:16px">
+    <button class="btn warn sm" type="submit">Stornovať žiadanku</button>
+  </form>
+<% } %>
+
+<p style="margin-top:24px"><a href="<%= base %>/ziadanky">← Späť na zoznam</a></p>
+
+<%- include('partials/foot') %>

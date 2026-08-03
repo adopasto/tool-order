@@ -1,0 +1,57 @@
+{
+  "cislo": "CP250339",
+  "vystavena": "2025-07-15",
+  "platna_do": "2025-08-10",
+  "spolu_bez_dph": 2.84,
+  "spolu_s_dph": 3.49,
+  "mena": "EUR",
+  "priloha": "CP_250339.pdf",
+  "poznamka": "Vyhotovil Gallas Valer Ing. Ponuka obsahuje vzorkové množstvá 1 pár – ceny sú množstevné pásma.",
+  "dodavatel": {
+    "nazov": "SULKA, s.r.o.",
+    "ico": "36333816",
+    "dic": "2021796480",
+    "kontakt": "Gallas Valer Ing.",
+    "email": "objednavky@sulka.sk",
+    "telefon": "+421 907 785 138",
+    "adresa": "Gorkého 3, 811 01 Bratislava (prevádzka Ľ. Štúra 1543, 018 41 Dubnica nad Váhom)",
+    "dodacia_lehota": 7
+  },
+  "riadky": [
+    {
+      "kod_dodavatela": "A9001/08",
+      "popis": "Rukavice ARDON LEO ESD, v.08/M",
+      "polozka": {
+        "kod": "OOP-ESD-LEO-08",
+        "nazov": "Rukavice ARDON LEO ESD, veľ. 08/M",
+        "kategoria": "OOPP",
+        "jednotka": "pár",
+        "esd": true,
+        "signalna_zasoba": 24,
+        "popis": "Povrstvené prsty aj dlaň."
+      },
+      "pasma": [
+        { "od_mnozstva": 12,   "cena": 0.49, "poznamka": "cena platí na objednávky 12–239 párov" },
+        { "od_mnozstva": 240,  "cena": 0.44, "poznamka": "cena platí na objednávky 240–1439 párov" },
+        { "od_mnozstva": 1440, "cena": 0.42, "poznamka": "cena platí na objednávky nad 1440 párov" }
+      ]
+    },
+    {
+      "kod_dodavatela": "A9004/08",
+      "popis": "Rukavice ARDON BUCK ESD, v.08/M",
+      "polozka": {
+        "kod": "OOP-ESD-BUCK-08",
+        "nazov": "Rukavice ARDON BUCK ESD, veľ. 08/M",
+        "kategoria": "OOPP",
+        "jednotka": "pár",
+        "esd": true,
+        "signalna_zasoba": 24
+      },
+      "pasma": [
+        { "od_mnozstva": 12,   "cena": 0.52, "poznamka": "cena platí pri objednaní 12–239 párov" },
+        { "od_mnozstva": 240,  "cena": 0.50, "poznamka": "cena platí pri objednaní 240–1439 párov" },
+        { "od_mnozstva": 1440, "cena": 0.46, "poznamka": "cena platí pri objednaní 1440 párov a viac" }
+      ]
+    }
+  ]
+}

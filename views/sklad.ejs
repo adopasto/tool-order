@@ -1,0 +1,177 @@
+<%- include('partials/head', { title: 'Sklad', nav: 'sklad' }) %>
+
+<div class="hlavicka">
+  <div>
+    <h1>Sklad</h1>
+    <p class="sub">Stav sa mení len pohybmi – príjmom, výdajom alebo inventúrou. Nikdy sa neprepisuje ručne.</p>
+  </div>
+</div>
+
+<div class="tabs" style="margin-bottom:16px">
+  <a href="<%= base %>/sklad" class="<%= zalozka === 'stav' ? 'active' : '' %>">Stav zásob</a>
+  <a href="<%= base %>/sklad/doobjednat" class="<%= zalozka === 'doobjednat' ? 'active' : '' %>">
+    Doobjednať<% if (alertCount) { %> (<%= alertCount %>)<% } %></a>
+  <% if (['storekeeper','admin'].includes(user.role)) { %>
+    <a href="<%= base %>/sklad?tab=prijem" class="<%= zalozka === 'prijem' ? 'active' : '' %>">Príjem</a>
+    <a href="<%= base %>/sklad?tab=inventura" class="<%= zalozka === 'inventura' ? 'active' : '' %>">Inventúra</a>
+  <% } %>
+  <a href="<%= base %>/sklad?tab=pohyby" class="<%= zalozka === 'pohyby' ? 'active' : '' %>">Pohyby</a>
+</div>
+
+<%# ---------------- STAV ZÁSOB ---------------- %>
+<% if (zalozka === 'stav') { %>
+  <form class="toolbar" method="get" action="<%= base %>/sklad">
+    <div class="grow"><input type="search" name="q" value="<%= q %>" placeholder="Hľadať podľa kódu, názvu alebo regálu"></div>
+    <button class="btn sec" type="submit">Hľadať</button>
+    <% if (q) { %><a class="btn sec" href="<%= base %>/sklad">Zrušiť</a><% } %>
+  </form>
+  <div class="panel">
+    <table class="tbl">
+      <thead><tr><th style="width:56px"></th><th style="width:96px">Kód</th><th>Položka</th>
+                 <th style="width:130px">Kategória</th><th style="width:70px">Regál</th>
+                 <th class="num" style="width:110px">Na sklade</th><th class="num" style="width:90px">Signálna</th>
+                 <th style="width:110px">Stav</th></tr></thead>
+      <tbody>
+      <% polozky.forEach(p => { %>
+        <tr>
+          <td><a href="<%= base %>/produkt/<%= p.id %>"><%- include('partials/mini', { path: p.image_path, kod: p.code }) %></a></td>
+          <td class="mono"><a href="<%= base %>/produkt/<%= p.id %>"><%= p.code %></a></td>
+          <td><a class="odkaz-ink" href="<%= base %>/produkt/<%= p.id %>"><%= p.name %></a><%= p.is_esd ? ' · ESD' : '' %></td>
+          <td style="color:var(--steel);font-size:13px"><%= p.cat_name || '—' %></td>
+          <td class="mono" style="font-size:12px"><%= p.location || '—' %></td>
+          <td class="num"><b><%= p.stock_qty %></b> <%= p.unit %></td>
+          <td class="num" style="color:var(--steel)"><%= p.reorder_point %></td>
+          <td><span class="tag <%= p.stav %>"><%= p.stav === 'ok' ? 'v poriadku' : (p.stav === 'nizka' ? 'nízka' : 'vypredané') %></span></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+<%# ---------------- DOOBJEDNAŤ ---------------- %>
+<% } else if (zalozka === 'doobjednat') { %>
+  <div class="hlavicka" style="margin-bottom:12px">
+    <p class="sub" style="max-width:640px;margin:0">Položky na signálnej zásobe alebo pod ňou. Zoznam vzniká
+      automaticky pri výdaji a zatvorí sa sám, keď príjem stav zdvihne. Objednávku vystavuje oddelenie nákupu.</p>
+    <% if (alerty.length) { %>
+      <div style="display:flex;gap:8px">
+        <a class="btn sec" href="<%= base %>/sklad/doobjednat/export.csv">Stiahnuť CSV</a>
+        <form method="post" action="<%= base %>/sklad/doobjednat/suhrn"><button class="btn" type="submit">Poslať e-mailom</button></form>
+      </div>
+    <% } %>
+  </div>
+  <% if (alerty.length === 0) { %>
+    <div class="empty">Všetko je nad signálnou zásobou. Netreba nič doobjednávať.</div>
+  <% } else { %>
+    <div class="panel">
+      <table class="tbl">
+        <thead><tr><th style="width:56px"></th><th style="width:96px">Kód</th><th>Položka</th>
+                   <th style="width:70px">Regál</th><th class="num" style="width:100px">Na sklade</th>
+                   <th class="num" style="width:90px">Signálna</th><th class="num" style="width:100px">Doobjednať</th>
+                   <th style="width:190px">Obvyklý dodávateľ</th></tr></thead>
+        <tbody>
+        <% alerty.forEach(a => { %>
+          <tr>
+            <td><a href="<%= base %>/produkt/<%= a.item_id %>"><%- include('partials/mini', { path: a.image_path, kod: a.code }) %></a></td>
+            <td class="mono"><a href="<%= base %>/produkt/<%= a.item_id %>"><%= a.code %></a></td>
+            <td><a class="odkaz-ink" href="<%= base %>/produkt/<%= a.item_id %>"><%= a.name %></a></td>
+            <td class="mono" style="font-size:12px"><%= a.location || '—' %></td>
+            <td class="num" style="color:<%= a.stock_qty <= 0 ? 'var(--zero)' : 'var(--low)' %>"><b><%= a.stock_qty %></b> <%= a.unit %></td>
+            <td class="num" style="color:var(--steel)"><%= a.reorder_point %></td>
+            <td class="num"><b><%= a.reorder_qty ?? '—' %></b></td>
+            <td style="font-size:13px"><%= a.supplier_name || '—' %>
+              <% if (a.supplier_sku) { %><div class="mono" style="font-size:11.5px;color:var(--steel)"><%= a.supplier_sku %> · ~<%= a.lead_time_days %> dní</div><% } %></td>
+          </tr>
+        <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+<%# ---------------- PRÍJEM ---------------- %>
+<% } else if (zalozka === 'prijem') { %>
+  <div class="panel" style="max-width:620px">
+    <div class="panel-h">Príjem na sklad</div>
+    <div class="panel-b">
+      <form method="post" action="<%= base %>/sklad/prijem">
+        <div class="field">
+          <label for="p_item">Položka</label>
+          <select id="p_item" name="item_id" required>
+            <% polozky.forEach(p => { %>
+              <option value="<%= p.id %>"><%= p.code %> – <%= p.name %> (<%= p.stock_qty %> <%= p.unit %>)</option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="formrow">
+          <div class="field"><label for="p_qty">Prijaté množstvo</label>
+            <input type="number" id="p_qty" name="qty" min="0.001" step="any" value="1" required></div>
+          <div class="field"><label for="p_sup">Dodávateľ</label>
+            <select id="p_sup" name="supplier_id"><option value="">—</option>
+              <% dodavatelia.forEach(d => { %><option value="<%= d.id %>"><%= d.name %></option><% }) %>
+            </select></div>
+        </div>
+        <div class="field"><label for="p_note">Doklad / poznámka</label>
+          <input type="text" id="p_note" name="note" placeholder="Dodací list 2026/1187"></div>
+        <button class="btn" type="submit">Zaevidovať príjem</button>
+      </form>
+    </div>
+  </div>
+
+<%# ---------------- INVENTÚRA ---------------- %>
+<% } else if (zalozka === 'inventura') { %>
+  <div class="panel" style="max-width:620px">
+    <div class="panel-h">Inventúra / oprava stavu</div>
+    <div class="panel-b">
+      <form method="post" action="<%= base %>/sklad/korekcia">
+        <div class="field">
+          <label for="k_item">Položka</label>
+          <select id="k_item" name="item_id" required>
+            <% polozky.forEach(p => { %>
+              <option value="<%= p.id %>"><%= p.code %> – <%= p.name %> (<%= p.stock_qty %> <%= p.unit %>)</option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="formrow">
+          <div class="field"><label for="k_qty">Zistený skutočný stav</label>
+            <input type="number" id="k_qty" name="new_qty" min="0" step="any" value="0" required></div>
+          <div class="field"><label for="k_typ">Typ zápisu</label>
+            <select id="k_typ" name="typ">
+              <option value="INVENTURA">Inventúra</option>
+              <option value="KOREKCIA">Korekcia</option>
+            </select></div>
+        </div>
+        <div class="field"><label for="k_note">Poznámka</label>
+          <input type="text" id="k_note" name="note" placeholder="Inventúra 06/2026"></div>
+        <button class="btn" type="submit">Zapísať rozdiel</button>
+        <div style="font-size:12px;color:var(--steel);margin-top:10px">
+          Zapíše sa rozdiel oproti aktuálnemu stavu, nie nová hodnota – história zostane úplná.
+        </div>
+      </form>
+    </div>
+  </div>
+
+<%# ---------------- POHYBY ---------------- %>
+<% } else { %>
+  <div class="panel">
+    <table class="tbl">
+      <thead><tr><th style="width:150px">Čas</th><th style="width:96px">Kód</th><th>Položka</th>
+                 <th style="width:100px">Typ</th><th class="num" style="width:90px">Množstvo</th>
+                 <th style="width:150px">Kto</th><th>Poznámka</th></tr></thead>
+      <tbody>
+      <% pohyby.forEach(m => { %>
+        <tr>
+          <td class="mono" style="font-size:12px"><%= m.created_at %></td>
+          <td class="mono"><a href="<%= base %>/produkt/<%= m.item_id %>"><%= m.code %></a></td>
+          <td><%= m.name %></td>
+          <td class="mono" style="font-size:11.5px"><%= m.move_type %></td>
+          <td class="num" style="color:<%= m.qty < 0 ? 'var(--zero)' : 'var(--ok)' %>"><%= m.qty > 0 ? '+' : '' %><%= m.qty %> <%= m.unit %></td>
+          <td style="font-size:13px"><%= m.full_name || '—' %></td>
+          <td style="font-size:12.5px;color:var(--steel)"><%= m.note || '' %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+<% } %>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,46 @@
+<%- include('partials/head', { title: 'Správa', nav: 'sprava' }) %>
+
+<h1>Správa sortimentu</h1>
+<p class="sub">Všetko, čo sa dá v katalógu zakladať a meniť. Stav skladu sa odtiaľto nemení –
+ten sa hýbe len príjmom, výdajom a inventúrou v sekcii Sklad.</p>
+
+<div class="dlazdice">
+  <a class="dlazdica" href="<%= base %>/sprava/polozky">
+    <div class="eyebrow">Katalóg</div>
+    <div class="dl-nadpis">Položky</div>
+    <div class="dl-cislo"><%= pocty.polozky %></div>
+    <div class="dl-popis"><%= pocty.aktivne %> aktívnych<% if (pocty.bezFotky) { %> · <%= pocty.bezFotky %> bez fotky<% } %></div>
+  </a>
+  <a class="dlazdica" href="<%= base %>/sprava/baliky">
+    <div class="eyebrow">Zostavy</div>
+    <div class="dl-nadpis">Balíky</div>
+    <div class="dl-cislo"><%= pocty.baliky %></div>
+    <div class="dl-popis">kombinácie položiek pre typové výdaje</div>
+  </a>
+  <a class="dlazdica" href="<%= base %>/sprava/kategorie">
+    <div class="eyebrow">Členenie</div>
+    <div class="dl-nadpis">Kategórie</div>
+    <div class="dl-cislo"><%= pocty.kategorie %></div>
+    <div class="dl-popis">ľavé menu v katalógu</div>
+  </a>
+  <a class="dlazdica" href="<%= base %>/sprava/dodavatelia">
+    <div class="eyebrow">Evidencia</div>
+    <div class="dl-nadpis">Dodávatelia</div>
+    <div class="dl-cislo"><%= pocty.dodavatelia %></div>
+    <div class="dl-popis">kontakty a čo kto dodáva</div>
+  </a>
+</div>
+
+<div class="panel" style="margin-top:22px">
+  <div class="panel-h">Rýchle akcie</div>
+  <div class="panel-b" style="display:flex;gap:10px;flex-wrap:wrap">
+    <a class="btn" href="<%= base %>/sprava/polozka/nova">+ Nová položka</a>
+    <a class="btn sec" href="<%= base %>/sprava/balik/novy">+ Nový balík</a>
+    <a class="btn sec" href="<%= base %>/sprava/dodavatel/novy">+ Nový dodávateľ</a>
+    <form method="post" action="<%= base %>/sprava/fotky/skenovat">
+      <button class="btn sec" type="submit">Priradiť fotky z priečinka</button>
+    </form>
+  </div>
+</div>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,70 @@
+<%- include('partials/head', { title: d.name, nav: 'dodavatelia' }) %>
+
+<div class="eyebrow">Dodávateľ</div>
+<h1><%= d.name %></h1>
+
+<div class="panel" style="margin:14px 0 22px"><div class="panel-b">
+  <dl class="kv">
+    <dt>Kontaktná osoba</dt><dd><%= d.contact_person || '—' %></dd>
+    <dt>E-mail</dt><dd><a href="mailto:<%= d.email %>"><%= d.email || '—' %></a></dd>
+    <dt>Telefón</dt><dd class="mono"><%= d.phone || '—' %></dd>
+    <dt>Web</dt><dd><%= d.web || '—' %></dd>
+    <dt>Adresa</dt><dd><%= d.address || '—' %></dd>
+    <dt>IČO</dt><dd class="mono"><%= d.ico || '—' %></dd>
+    <dt>Dodacia lehota</dt><dd><%= d.lead_time_days %> dní</dd>
+    <% if (d.note) { %><dt>Poznámka</dt><dd><%= d.note %></dd><% } %>
+  </dl>
+</div></div>
+
+<% if (ponuky.length) { %>
+  <h2>Cenové ponuky</h2>
+  <div class="panel" style="margin-bottom:22px">
+    <table class="tbl">
+      <thead><tr><th style="width:130px">Číslo</th><th style="width:120px">Vystavená</th>
+                 <th style="width:120px">Platná do</th><th class="num" style="width:110px">Bez DPH</th>
+                 <th class="num" style="width:90px">Riadkov</th><th>Poznámka</th>
+                 <th style="width:110px"></th></tr></thead>
+      <tbody>
+      <% ponuky.forEach(q => { %>
+        <tr>
+          <td class="mono"><%= q.number %></td>
+          <td class="mono" style="font-size:12px"><%= q.issued_at || '—' %></td>
+          <td class="mono" style="font-size:12px"><%= q.valid_until || '—' %></td>
+          <td class="num"><%= q.total_no_vat != null ? q.total_no_vat.toFixed(2) + ' €' : '—' %></td>
+          <td class="num"><%= q.riadkov %></td>
+          <td style="font-size:12.5px;color:var(--steel)"><%= q.note || '' %></td>
+          <td><% if (q.file_path) { %><a class="btn sec sm" href="<%= base %>/ponuka/<%= q.id %>/priloha">PDF</a><% } %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+<% } %>
+
+<h2>Dodávané položky</h2>
+<div class="panel">
+  <table class="tbl">
+    <thead>
+      <tr><th style="width:96px">Kód</th><th>Položka</th><th style="width:110px">Kat. č. dod.</th>
+          <th class="num" style="width:90px">Cena</th><th class="num" style="width:80px">Min. obj.</th>
+          <th class="num" style="width:100px">Na sklade</th><th style="width:110px">Stav</th></tr>
+    </thead>
+    <tbody>
+    <% polozky.forEach(p => { %>
+      <tr>
+        <td class="mono"><%= p.code %></td>
+        <td><%= p.name %><%= p.is_primary ? ' · hlavný dodávateľ' : '' %></td>
+        <td class="mono"><%= p.supplier_sku || '—' %></td>
+        <td class="num"><%= p.price != null ? p.price.toFixed(2) + ' €' : '—' %></td>
+        <td class="num"><%= p.min_order_qty %></td>
+        <td class="num"><%= p.stock_qty %> <%= p.unit %></td>
+        <td><span class="tag <%= p.stav %>"><%= p.stav === 'ok' ? 'v poriadku' : (p.stav === 'nizka' ? 'nízka' : 'vypredané') %></span></td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<p style="margin-top:24px"><a href="<%= base %>/dodavatelia">← Späť na zoznam</a></p>
+
+<%- include('partials/foot') %>

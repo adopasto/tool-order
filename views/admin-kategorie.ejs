@@ -1,0 +1,50 @@
+<%- include('partials/head', { title: 'Kategórie', nav: 'sprava',
+      drobky: [{text:'Správa', href:'/sprava'}, {text:'Kategórie'}] }) %>
+
+<h1>Kategórie</h1>
+<p class="sub">Určujú ľavé menu v katalógu. Poradie je číslo – čím nižšie, tým vyššie v zozname.</p>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">
+  <div class="panel">
+    <table class="tbl">
+      <thead><tr><th>Názov</th><th class="num" style="width:90px">Položiek</th>
+                 <th class="num" style="width:80px">Balíkov</th>
+                 <th style="width:100px">Poradie</th><th style="width:140px"></th></tr></thead>
+      <tbody>
+      <% kategorie.forEach(c => { %>
+        <tr>
+          <td><input form="k<%= c.id %>" type="text" name="name" value="<%= c.name %>"></td>
+          <td class="num"><%= c.pocet_poloziek %></td>
+          <td class="num"><%= c.pocet_balikov %></td>
+          <td><input form="k<%= c.id %>" type="number" name="sort_order" value="<%= c.sort_order %>"></td>
+          <td style="display:flex;gap:6px">
+            <button form="k<%= c.id %>" class="btn sec sm" type="submit">Uložiť</button>
+            <% if (c.pocet_poloziek === 0 && c.pocet_balikov === 0) { %>
+              <button form="kd<%= c.id %>" class="btn warn sm" type="submit">×</button>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="panel-h">Nová kategória</div>
+    <div class="panel-b">
+      <form method="post" action="<%= base %>/sprava/kategorie">
+        <div class="field"><label for="nk">Názov</label><input type="text" id="nk" name="name" required></div>
+        <div class="field"><label for="ns">Poradie</label>
+          <input type="number" id="ns" name="sort_order" value="<%= (kategorie.length + 1) * 10 %>"></div>
+        <button class="btn sec" type="submit">Pridať</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% kategorie.forEach(c => { %>
+  <form id="k<%= c.id %>" method="post" action="<%= base %>/sprava/kategoria/<%= c.id %>"></form>
+  <form id="kd<%= c.id %>" method="post" action="<%= base %>/sprava/kategoria/<%= c.id %>/zmazat"></form>
+<% }) %>
+
+<%- include('partials/foot') %>

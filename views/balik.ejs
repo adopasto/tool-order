@@ -1,0 +1,60 @@
+<%- include('partials/head', { title: b.code || b.name, nav: 'katalog' }) %>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+  <div>
+    <div class="eyebrow">Balík<%= b.cat_name ? ' · ' + b.cat_name : '' %></div>
+    <h1><%= b.name %></h1>
+    <div class="mono" style="color:var(--steel);font-size:13px"><%= b.code || '' %></div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <% if (['admin','storekeeper'].includes(user.role)) { %>
+      <a class="btn sec" href="<%= base %>/sprava/balik/<%= b.id %>">Upraviť</a>
+    <% } %>
+    <a class="btn sec" href="<%= base %>/katalog?typ=baliky">Späť na balíky</a>
+  </div>
+</div>
+
+<% if (b.description) { %>
+  <div class="panel" style="margin-bottom:16px"><div class="panel-b">
+    <p style="margin:0"><%= b.description %></p>
+  </div></div>
+<% } %>
+
+<div class="panel">
+  <div class="panel-h">Obsah balíka</div>
+  <table class="tbl">
+    <thead><tr><th style="width:56px"></th><th style="width:96px">Kód</th><th>Položka</th>
+               <th class="num" style="width:90px">V balíku</th>
+               <th class="num" style="width:100px">Na sklade</th><th style="width:120px">Stav</th></tr></thead>
+    <tbody>
+    <% b.komponenty.forEach(k => { %>
+      <tr>
+        <td><%- include('partials/mini', { path: k.image_path, kod: k.code }) %></td>
+        <td class="mono"><a href="<%= base %>/produkt/<%= k.id %>"><%= k.code %></a></td>
+        <td><%= k.name %></td>
+        <td class="num"><%= k.qty %> <%= k.unit %></td>
+        <td class="num"><%= k.stock_qty %></td>
+        <td><span class="tag <%= k.stav %>"><%= k.stav === 'ok' ? 'v poriadku' : (k.stav === 'nizka' ? 'nízka' : 'vypredané') %></span></td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+  <div class="binlabel">
+    <div class="row">
+      <span class="qty"><%= b.dostupnost %><small>kompletných sád na sklade</small></span>
+      <span class="tag <%= b.dostupnost > 0 ? 'ok' : 'nula' %>">
+        <%= b.dostupnost > 0 ? 'dostupné' : 'nekompletné' %></span>
+    </div>
+    <div class="gauge-legend">balík sa pri odoslaní žiadanky rozloží na jednotlivé položky</div>
+  </div>
+  <% if (b.active) { %>
+    <form class="addbox" method="post" action="<%= base %>/kosik/pridat">
+      <input type="hidden" name="kind" value="bundle">
+      <input type="hidden" name="id" value="<%= b.id %>">
+      <input type="number" name="qty" value="1" min="1" step="1" aria-label="Počet sád">
+      <button class="btn sm" type="submit">Do košíka</button>
+    </form>
+  <% } %>
+</div>
+
+<%- include('partials/foot') %>

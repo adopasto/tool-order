@@ -1,0 +1,48 @@
+<%- include('partials/head', { title: 'Žiadanky', nav: 'ziadanky' }) %>
+
+<h1>Žiadanky</h1>
+<p class="sub">
+  <% if (user.role === 'requester') { %>Vaše odoslané žiadanky a ich stav.
+  <% } else if (user.role === 'approver') { %>Žiadanky vášho strediska čakajúce na rozhodnutie.
+  <% } else { %>Všetky žiadanky v systéme.<% } %>
+</p>
+
+<div class="tabs">
+  <a href="<%= base %>/ziadanky" class="<%= !stav ? 'active' : '' %>">Všetky</a>
+  <% Object.entries(STAV_LABEL).forEach(([k, v]) => { %>
+    <a href="<%= base %>/ziadanky?stav=<%= k %>" class="<%= stav === k ? 'active' : '' %>"><%= v %></a>
+  <% }) %>
+</div>
+
+<% if (ziadanky.length === 0) { %>
+  <div class="empty">Zatiaľ žiadne žiadanky. Vytvorte prvú v katalógu.</div>
+<% } else { %>
+<div class="panel">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width:130px">Číslo</th>
+        <th style="width:150px">Dátum</th>
+        <th>Žiadateľ</th>
+        <th style="width:90px">Stredisko</th>
+        <th class="num" style="width:70px">Riadkov</th>
+        <th style="width:160px">Stav</th>
+      </tr>
+    </thead>
+    <tbody>
+    <% ziadanky.forEach(z => { %>
+      <tr>
+        <td class="mono"><a href="<%= base %>/ziadanky/<%= z.id %>"><%= z.number %></a></td>
+        <td class="mono" style="font-size:12px"><%= z.created_at %></td>
+        <td><%= z.ziadatel %></td>
+        <td class="mono"><%= z.cost_center || '—' %></td>
+        <td class="num"><%= z.pocet_riadkov %></td>
+        <td><span class="stav <%= z.status %>"><%= STAV_LABEL[z.status] %></span></td>
+      </tr>
+    <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>
+
+<%- include('partials/foot') %>
