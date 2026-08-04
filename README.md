@@ -7,42 +7,71 @@ keď je čo doobjednať.
 **Žiadanky sú interné – medzi výrobou a skladom.** Objednávky u dodávateľov vystavuje iné
 oddelenie; tento systém im pripraví len podklad (zoznam, CSV, e-mail).
 
-Node.js + Express + EJS + SQLite. **Žiadny natívny modul** — databáza beží na vstavanom
-`node:sqlite`, takže netreba Python ani Visual Studio Build Tools. Žiadne CDN ani externé
-fonty, beží aj na firemnom PC s blokovaným internetom.
-
-**Vyžaduje Node.js 24** (alebo 22.5–23.3 s prepínačom `--experimental-sqlite`).
+Backend: **FastAPI** (Python), databáza SQLite cez stdlib `sqlite3` (žiadny natívny modul,
+žiadny ORM). Frontend: **Next.js** (App Router, TypeScript) — server-rendered stránky +
+Server Actions pre formuláre. Rovnaký vzhľad a správanie ako pôvodná verzia (Express + EJS),
+len na modernejšom stacku.
 
 ---
 
 ## 1. Rýchly štart
 
+### Backend (FastAPI)
+
 ```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate            # Windows (na Linux/Mac: source .venv/bin/activate)
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+Pri prvom spustení sa databáza (`data/naradie.db`) vytvorí a naplní demo dátami automaticky.
+
+```bash
+python -m app.reset      # zmaže DB a naplní odznova
+python -m import_data.index   # import prehľadov (.xlsx) a cenových ponúk (.json) z priečinka import/
+```
+
+### Frontend (Next.js)
+
+```bash
+cd frontend
+cp .env.local.example .env.local   # vyplň AUTH_SECRET (openssl rand -base64 32)
 npm install
-npm run reset      # vytvorí databázu a naplní demo dáta
-npm start          # http://localhost:3000
+npm run dev -- --port 3000
 ```
 
-Testovacie kontá — heslo je vždy `meno + 123` (napr. `vyroba123`):
+Otvor `http://localhost:3000` — automaticky presmeruje na katalóg / prihlásenie.
 
-| Používateľ | Rola          | Čo môže                                            |
-|------------|---------------|----------------------------------------------------|
-| `vyroba`   | requester     | katalóg, košík, vlastné žiadanky                    |
-| `majster`  | approver      | schváliť / zamietnuť žiadanky svojho strediska      |
-| `sklad`    | storekeeper   | výdaj, príjem, inventúra, upozornenia               |
-| `nakup`    | buyer         | prehľad zásob, zoznam na doobjednanie, export CSV   |
-| `admin`    | admin         | všetko + správa položiek a signálnych zásob         |
+### Prihlásenie
 
-Ďalšie príkazy:
+Prihlasovanie rieši výhradne Next.js (**Auth.js**) — FastAPI heslo nikdy neriešilo a
+nerieši ani teraz, len dohľadá prihláseného používateľa podľa e-mailu v tabuľke `users`.
 
-```bash
-npm run dev        # reštart pri zmene súboru (node --watch)
-bash test-flow.sh  # smoke test celého toku cez curl
-```
+- **Lokálne** (`AUTH_MODE` nenastavené v `.env.local`) — na `/prihlasenie` je len pole na
+  e-mail, žiadne heslo ("dev-login"). Skús napr. `vyroba@example.com`:
+
+  | E-mail                  | Rola          | Čo môže                                          |
+  |--------------------------|---------------|---------------------------------------------------|
+  | `vyroba@example.com`     | requester     | katalóg, košík, vlastné žiadanky                   |
+  | `majster@example.com`    | approver      | schváliť / zamietnuť žiadanky svojho strediska     |
+  | `sklad@example.com`      | storekeeper   | výdaj, príjem, inventúra, upozornenia              |
+  | `nakup@example.com`      | buyer         | prehľad zásob, zoznam na doobjednanie, export CSV  |
+  | `admin@example.com`      | admin         | všetko + správa položiek a signálnych zásob        |
+
+- **Produkcia** — nastav `AUTH_MODE=entra` a v Azure vytvor App Registration:
+  - `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`
+  - Redirect URI: `{origin}/api/auth/callback/microsoft-entra-id`
+  - Povolené domény (pevne v `frontend/auth.ts`): `newayselectronics.com`,
+    `newayselectronics.ai` — iný e-mail sa neprihlási.
+  - Konto musí existovať v `users` (rolu/stredisko prideľuje admin, Entra ju neposiela).
 
 ---
 
 ## 2. Ako to funguje
+
+(funkčne totožné s pôvodnou Node/Express verziou — len prepísané na FastAPI + Next.js)
 
 ### Stav skladu sa neukladá, počíta sa
 
@@ -50,310 +79,118 @@ Zdrojom pravdy je tabuľka `stock_moves` (príjem `+`, výdaj `−`, korekcia `�
 `items.stock_qty` je len cache, ktorú udržiava databázový trigger `stock_moves_ai`.
 Dôvod: auditovateľnosť — pri každom kuse vieš kto, kedy a na akú žiadanku.
 
-Kontrola zhody cache s pohybmi (patrí do nočnej úlohy):
-
-```sql
-SELECT i.code, i.stock_qty, COALESCE(SUM(m.qty), 0) AS skutocne
-FROM items i LEFT JOIN stock_moves m ON m.item_id = i.id
-GROUP BY i.id HAVING i.stock_qty <> COALESCE(SUM(m.qty), 0);
-```
-
 ### Balíky nie sú skladové položky
 
 Balík je len predpis (`bundle_items`). Pri odoslaní košíka sa rozloží na komponenty
-a do `request_lines` sa uloží n riadkov s odkazom `bundle_id`. Inak by vznikli dva
-paralelné sklady, ktoré si navzájom nesedia.
+a do `request_lines` sa uloží n riadkov s odkazom `bundle_id`.
 
-### Navigácia
+### Identita naprieč Next.js ↔ FastAPI
 
-Menu sa mení podľa role, aby nikto nepozeral na položky, ktoré nemôže použiť:
+Next.js (Auth.js) je jediný vlastník identity. Každý request na FastAPI — priamy
+(Server Component/Action, `lib/api.ts`) aj cez `/api/[...path]` proxy — dostane hlavičku
+`X-Neways-User` s e-mailom z Auth.js session; hodnotu poslanú priamo klientom Next.js
+vždy najprv zahodí a znovu vytvorí zo session na serveri, takže sa nedá sfalšovať.
+FastAPI podľa e-mailu len dohľadá rolu/stredisko v `users` (`backend/app/deps.py`) —
+heslo nikde v appke neexistuje.
 
-| Rola | Čo vidí v menu |
-|------|----------------|
-| Výroba | Katalóg · Košík · Žiadanky |
-| Schvaľovateľ | Katalóg · Košík · Žiadanky (s počtom na schválenie) |
-| Sklad | + Sklad · Doobjednať · Dodávatelia · Správa |
-| Zásobovanie | + Sklad · Doobjednať · Dodávatelia |
-| Administrátor | všetko |
+Session cookie (Starlette `SessionMiddleware`) na strane FastAPI ostáva, ale už len pre
+košík a flash správu — nie pre identitu. Formuláre bežia ako Next.js **Server Actions**,
+ktoré po zavolaní API urobia `redirect()` presne tak, ako predtým `res.redirect()` po
+`req.session.flash = ...`. Fotky a PDF prílohy idú cez `/api/[...path]` reverse-proxy
+route (Next.js), aby `X-Neways-User` fungoval aj pre `<img>` tagy.
 
-Sklad je jedna stránka s piatimi záložkami – **Stav zásob, Doobjednať, Príjem, Inventúra,
-Pohyby**. Na podstránkach je drobčeková navigácia, takže vždy vidno, kde človek je.
-V pätičke je číslo verzie – podľa neho spoznáš, či beží aktuálny build.
+### Signálna zásoba, pošta, žiadanky
 
-### Detail produktu
-
-Každá položka má vlastnú kartu na `/produkt/:id`, balík na `/balik/:id`. V katalógu je
-klikateľná **celá dlaždica**, v zozname kód aj názov; funguje to aj z košíka, žiadanky,
-skladu a zoznamu dodávateľa. Vidí ho každý prihlásený a nájde tam
-fotku, popis, stav skladu s ukazovateľom signálnej zásoby, umiestnenie, dodávateľov,
-v ktorých balíkoch položka je, a výdaj za posledných 90 dní vrátane mesačného priemeru –
-z toho sa dá rozumne odvodiť signálna zásoba. Sklad a nákup vidia navyše posledné pohyby.
-
-### Správa katalógu
-
-Záložka **Správa** (admin a skladník) obsahuje:
-
-Záložka **Správa** je rozcestník so štyrmi dlaždicami; každá vedie na vlastný zoznam:
-
-| Sekcia | Adresa | Čo tam vieš |
-|--------|--------|-------------|
-| Položky | `/sprava/polozky` | založiť, upraviť, zmazať, nahrať fotku, priradiť dodávateľa |
-| Balíky | `/sprava/baliky` | hlavička + pridávanie a odoberanie komponentov |
-| Kategórie | `/sprava/kategorie` | názov, poradie v ľavom menu, mazanie prázdnych |
-| Dodávatelia | `/sprava/dodavatelia` | kontakty, dodacia lehota, prehľad dodávaných položiek |
-
-Novú položku založíš aj priamo z katalógu tlačidlom **+ Nová položka**, ktoré vidí
-admin a skladník.
-
-Pri zakladaní položky sa počiatočný stav zapíše ako pohyb typu `INVENTÚRA`, nie priamym
-prepisom `stock_qty` – história tak sedí od prvého kusu. Stav skladu sa vo formulári
-položky **nedá prepísať**; mení sa len príjmom, výdajom alebo inventúrou.
-
-**Mazanie je bezpečné.** Ak má položka pohyby alebo je na nejakej žiadanke, nezmaže sa,
-len sa deaktivuje a zmizne z katalógu – história zostane úplná. Fyzicky sa zmažú len
-položky, ktoré nikdy neboli v obehu. Rovnako balíky (deaktivujú sa, ak už boli objednané)
-a kategórie (nezmažú sa, kým do nich patrí položka).
-
-### Fotky položiek
-
-Každá položka má fotku. Ukladá sa do `data/uploads/items` **pod kódom položky**
-(`NAR-001.jpg`), takže priečinok je čitateľný aj bez databázy.
-
-Dva spôsoby naplnenia:
-
-1. **Po jednej** – `/admin/polozky`, stĺpec *Fotka*, vyber súbor a nahraj (JPG/PNG/WEBP do 4 MB).
-2. **Hromadne** – pomenuj súbory kódmi položiek, nakopíruj ich do `data/uploads/items`
-   a klikni *Priradiť fotky z priečinka*. Aplikácia ich spáruje podľa názvu a vypíše,
-   ktoré súbory nemali zhodu. Pri stovkách položiek je to jediná rozumná cesta.
-
-Fotky sa nezmenšujú (žiadny natívny modul), takže pri fotení z mobilu daj rozlíšenie
-okolo 1000 px – limit je 4 MB na súbor. Miniatúry sú aj v košíku, v žiadanke a v zozname
-na doobjednanie, aby sklad videl, či berie správny kus.
-
-### Signálna zásoba
-
-Kontrola beží **v tej istej transakcii ako výdaj** (`src/services/stock.js` → `checkReorder`),
-nie cronom — inak by upozornenie prišlo až ráno. Čiastočný unikátny index `ux_alert_open`
-zabezpečí, že na jednu položku je naraz najviac jedno neuzavreté upozornenie, takže pri
-hromadnom výdaji nepríde desať mailov. Alert sa uzavrie automaticky pri príjme, ktorý
-zdvihne stav nad `reorder_point`.
-
-Položky pod hranicou sa zbierajú na stránke **Doobjednať**, odkiaľ ich vieš poslať
-e-mailom alebo stiahnuť ako CSV (bodkočiarka + BOM, otvorí sa priamo v Exceli)
-a odovzdať oddeleniu nákupu. Dodávateľ je v zozname len ako referencia – systém
-u neho nič neobjednáva.
-
-Východisková hodnota je 5 ks pre všetko, ale nastavuje sa na položku (`/admin/polozky`).
-Keď nazbieraš spotrebu, prepočítaj:
-
-```
-ROP = priemerná denná spotreba × dodacia lehota + poistná zásoba
-```
-
-### Pošta cez outbox
-
-Mail sa najprv zapíše do `mail_outbox` v rámci transakcie. Keby sa odosielalo priamo
-a SMTP zlyhalo, transakcia by sa vrátila a výdaj by sa stratil. Worker `startWorker()`
-odošle správy až po commite, každých 15 s.
-
-V testovacom režime (`MAIL_MODE=file`) sa maily ukladajú ako `.eml` do `data/mail/` —
-otvoríš ich dvojklikom v Outlooku.
-
-### Stavy žiadanky
+Kontrola signálnej zásoby beží v tej istej transakcii ako výdaj/príjem
+(`backend/app/services/stock.py`), pošta ide cez transactional outbox
+(`mail_outbox` + asyncio worker, `backend/app/services/mailer.py`), stavy žiadanky:
 
 ```
 NOVA → SCHVALENA → CAKA_NA_TOVAR ⇄ CIASTOCNE_VYDANA → VYDANA
 NOVA → ZAMIETNUTA        kdekoľvek → STORNO
 ```
 
-`CAKA_NA_TOVAR` sa nastaví automaticky, keď požadované množstvo prevyšuje zásobu.
-Riadok sa nezruší, len čaká — sklad ho vidí vo fronte.
+E-mail sa odošle pri: novej žiadanke (schvaľovateľom strediska), schválení (skladu),
+zamietnutí (žiadateľovi), (čiastočnom) výdaji (žiadateľovi, čo si môže vyzdvihnúť),
+stornovaní (schvaľovateľovi strediska + skladu) a poklese na signálnu zásobu (`MAIL_ALERTS`).
 
----
-
-## 2b. Import podkladov
-
-```bash
-npm run import                    # spracuje všetko v priečinku import/
-npm run import -- subor.xlsx      # jeden konkrétny súbor
-```
-
-Import je **idempotentný** – párovanie je podľa kódu položky a podľa čísla ponuky,
-takže opakované spustenie nič nezduplikuje. Existujúcim položkám len dopĺňa chýbajúce
-údaje, ručné úpravy v aplikácii neprepisuje. **Skladové množstvá import nikdy nemení** –
-tie vznikajú výhradne pohybmi.
-
-### Prehľad zásob (.xlsx)
-
-Hľadá stĺpce podľa názvu, na poradí nezáleží:
-
-| Stĺpec v tabuľke | Kam sa uloží |
-|------------------|--------------|
-| Kód | `items.code` |
-| Názov | `items.name` |
-| Min. zásoba | `items.reorder_point` – signálna zásoba |
-| Návrh 6M zásoba | `items.reorder_qty` – koľko doobjednať |
-| Cena / ks | `items.ref_price` – orientačná cena, nie cena dodávateľa |
-| Spotreba 6 mes. | `items.usage_6m` – podklad na výpočet ROP |
-| Poznámka | popis položky |
-
-Kategória sa priradí podľa názvu (hrot, pero, spotrebný materiál, ručné náradie, OOPP),
-príznak ESD podľa výskytu „ESD" v názve. Poznámka typu „cena za balík v ktorom je 5ks"
-prepne mernú jednotku na `bal`, aby cena a množstvo sedeli.
-
-**Riadky bez kódu** sa založia s kódom odvodeným z názvu a označia ako **neaktívne** –
-do katalógu sa nedostanú, kým im niekto nedoplní kód a cenu v Správe → Položky.
-Import ich na konci vypíše.
-
-### Cenová ponuka (.json + PDF)
-
-PDF sa strojovo neparsuje – rozloženie sa u každého dodávateľa líši a chybne prečítaná
-cena je horšia než žiadna. Ponuka sa preto prepíše do krátkeho JSON súboru
-(vzory `import/CP250313.json` a `CP250339.json`) a originál sa priloží:
-
-```
-import/
-  CP250313.json          popis ponuky
-  prilohy/CP_250313.pdf   originál, skopíruje sa do data/quotes
-```
-
-Import z toho založí dodávateľa, položky, väzbu položka ↔ dodávateľ s katalógovým
-číslom a **množstevné cenové pásma**. Tie sú na karte položky ako tabuľka „od množstva →
-cena", takže pri doobjednávaní hneď vidno, kde sa oplatí objednať viac. Pri rukaviciach
-ARDON PROOF je rozdiel 0,52 € pri 12 pároch oproti 0,46 € pri 252 – teda 11 %.
-
-Ponuky sú vedené len ako evidencia. Objednávku u dodávateľa vystavuje oddelenie nákupu.
-
----
-
-## 3. Nasadenie na portál NEWAYS
-
-Portál `portal.newayselectronics.ai` používa **Azure Entra ID cez App Service Easy Auth**
-(`/.auth/login/aad`). Vlastné prihlasovanie teda netreba — za proxy prichádza hlavička
-s prihláseným používateľom.
+**Odosielanie:** `MAIL_MODE=file` (default, lokálny vývoj) zapisuje `.eml` do `data/mail/`
+— otvoríš dvojklikom v Outlooku, nikam sa nič neodosiela. `MAIL_MODE=smtp` odosiela reálne
+cez `smtplib` (stdlib, žiadna závislosť navyše):
 
 ```bash
-TRUST_HEADER_AUTH=1
-HEADER_AUTH_NAME=x-ms-client-principal-name
-BASE_PATH=/naradie                                   # ak beží pod podadresárom
-FRAME_ANCESTOR=https://portal.newayselectronics.ai   # ak sa vkladá do iframe
-SESSION_SECRET=<náhodný reťazec>
 MAIL_MODE=smtp
-MAIL_ALERTS=sklad@newayselectronics.com,zasobovanie@newayselectronics.com
-UPLOAD_DIR=D:\\data\\naradie\\fotky
-PORT=3000
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587            # 465 + SMTP_USE_SSL=1 pre implicitné TLS
+SMTP_USER=...
+SMTP_PASSWORD=...
+MAIL_FROM=naradie@newayselectronics.com
 ```
 
-Podmienka: konto musí existovať v tabuľke `users`, pričom `username` alebo `email`
-sa musí zhodovať s UPN z Entra ID. **Rolu prideľuješ ty** — Entra ju neposiela.
-Ak chceš role z Entra skupín, rozšír `headerAuth()` o dekódovanie hlavičky
-`X-MS-CLIENT-PRINCIPAL` (base64 JSON s claims).
+### Import podkladov
 
-Bez Easy Auth (napr. vlastný VM za Caddy/nginx) nechaj `TRUST_HEADER_AUTH=0`
-a použije sa vstavané prihlasovanie.
+```bash
+cd backend
+python -m import_data.index                    # spracuje všetko v priečinku import/
+python -m import_data.index ../import/subor.xlsx   # jeden konkrétny súbor
+```
+
+Import je idempotentný (párovanie podľa kódu položky / čísla ponuky), skladové množstvá
+nikdy nemení — pozri komentáre v `backend/import_data/index.py`.
 
 ---
 
-## 4. Prechod na PostgreSQL
+## 3. Nasadenie
 
-SQLite je tu kvôli tomu, aby si to rozbehol na notebooku bez inštalácie servera.
-Pri desiatkach súčasných používateľov to stále stačí (WAL režim), ale ak to má bežať
-vedľa `cal-esd-db` na spoločnom PG, zmeny sú malé:
-
-| SQLite                                   | PostgreSQL                                        |
-|------------------------------------------|---------------------------------------------------|
-| `INTEGER PRIMARY KEY AUTOINCREMENT`      | `SERIAL` / `GENERATED ALWAYS AS IDENTITY`         |
-| `REAL`                                   | `NUMERIC(12,3)`                                   |
-| `TEXT` s `datetime('now','localtime')`   | `TIMESTAMPTZ DEFAULT now()`                       |
-| trigger v SQL                            | `plpgsql` funkcia + `CREATE TRIGGER`              |
-| implicitná serializácia zápisov          | `SELECT … FOR UPDATE` v `vydaj()`                 |
-| `node:sqlite` (synchrónne)               | `pg` / `pg-promise` (async — treba `await`)       |
-
-Miesta, kde treba zásah, sú v kóde označené komentárom.
+Produkcia: `uvicorn` (backend) a `next start` (frontend, po `next build`), FastAPI
+dostupné len z Next.js servera (nie priamo z internetu — inak by si ktokoľvek vedel
+sfalšovať `X-Neways-User` a vydávať sa za iného používateľa). `FRONTEND_ORIGIN`
+(backend, CORS) a `BACKEND_URL` (frontend) nastav podľa skutočných adries. Entra
+premenné a `AUTH_SECRET` — pozri `frontend/.env.local.example`.
 
 ---
 
-## 4b. Riešenie problémov
-
-**`npm ERR! gyp ERR! find Python` / `prebuild-install warn install No prebuilt binaries found`**
-Toto sa stávalo pri pôvodnej verzii s `better-sqlite3` na Node 24. Aktuálna verzia
-natívny modul nepoužíva. Ak ti to vypíše, máš staré `node_modules`:
-
-```bash
-rmdir /s /q node_modules
-del package-lock.json
-npm install
-```
-
-**`Modul node:sqlite nie je dostupný`**
-Máš Node starší ako 23.4. Buď nainštaluj Node 24, alebo spúšťaj s prepínačom:
-
-```bash
-node --experimental-sqlite server.js
-```
-
-**`EPERM: operation not permitted, rmdir`** pri `npm install`
-Priečinok drží iný proces — najčastejšie bežiaci `node.exe` alebo antivírus.
-Zavri server (`Ctrl+C`), prípadne `taskkill /f /im node.exe`, a zopakuj inštaláciu.
-Pomôže aj presunúť projekt z `Downloads` inam, napr. `C:\Projekty\naradie`.
-
-**Port 3000 je obsadený**
-
-```bash
-set PORT=3100 && npm start
-```
-
----
-
-## 5. Štruktúra
+## 4. Štruktúra
 
 ```
-server.js                 vstupný bod, session, hlavičky, mount routerov
-src/
-  config.js               všetko cez premenné prostredia
-  db.js                   pripojenie + migrácia + obal transakcií nad node:sqlite
-  schema.sql              DDL vrátane triggera a čiastočného indexu
-  seed.js                 demo dáta (23 položiek, 3 balíky, 5 dodávateľov)
-  reset.js                zmaže DB a naplní odznova
-  middleware/auth.js      Easy Auth hlavička, prihlásenie, kontrola rolí
-  services/
-    stock.js              výdaj, príjem, korekcia, checkReorder
-    requests.js           číslovanie dokladov, odoslanie košíka, prepočet stavu
-    alerts.js             zoznam na doobjednanie, denný súhrn, CSV
-    photos.js             nahrávanie fotiek a hromadné párovanie podľa kódu
-  import/index.js         import prehľadov (.xlsx) a cenových ponúk (.json)
-    mailer.js             transactional outbox + worker
-    auth-hash.js          scrypt z node:crypto
-  routes/
-    auth.js               prihlásenie / odhlásenie
-    shop.js               katalóg + košík
-    products.js           karty produktu a balíka
-    admin.js              správa sortimentu pod /sprava
-    requests.js           žiadanky, schvaľovanie, výdaj
-    warehouse.js          sklad, dodávatelia, doobjednanie, položky a fotky
-views/                    EJS šablóny
-public/css/app.css        celý štýl v jednom súbore
-import/                   zdrojové podklady na import (xlsx, json, prilohy/)
+backend/
+  app/
+    main.py                 FastAPI app, session middleware, bezpečnostné hlavičky, routery
+    config.py                ENV-driven nastavenia
+    db.py                    obal nad stdlib sqlite3 (transakcie, migrácia)
+    schema.sql                DDL vrátane triggera a čiastočného indexu
+    seed.py, reset.py         demo dáta / reset databázy
+    deps.py                   auth závislosti (require_login, require_role - podľa X-Neways-User)
+    errors.py                 AppError -> HTTP 400
+    services/                 stock, requests, alerts, photos, mailer
+    routers/                  auth, shop, products, requests, warehouse, admin
+  import_data/index.py        import xlsx prehľadov a JSON cenových ponúk
+  requirements.txt
+
+frontend/
+  auth.ts                      Auth.js v5 - Entra ID / dev e-mail bypass
+  app/                        Next.js App Router stránky (rovnaké slovenské URL ako predtým)
+    api/[...path]/route.ts    reverse-proxy na FastAPI (fotky, PDF, klientský kontext, X-Neways-User)
+    api/auth/[...nextauth]/    Auth.js route handler
+    api/logout/route.ts        odhlásenie (FastAPI kosik/flash + Auth.js signOut)
+  components/                 AppChrome (topbar), Mini, Tag, BinLabel, Breadcrumbs, formuláre
+  lib/
+    api.ts                    apiRead/apiAction - cookie + X-Neways-User forwarding do FastAPI
+    actions.ts                 Server Actions pre formuláre (mimo prihlásenia/odhlásenia)
+    kontext.ts                 dedup'ovaný fetch usera/počítadiel pre topbar
+  app/globals.css              pôvodný vizuálny štýl (app.css), beze zmeny
+
+import/                       zdrojové podklady na import (xlsx, json, prilohy/)
 data/
-  naradie.db              databáza
-  quotes/                 priložené PDF cenových ponúk
-  uploads/items/          fotky položiek, názov = kód položky
-  mail/                   vygenerované .eml v testovacom režime
+  naradie.db                  databáza (SQLite)
+  quotes/                     priložené PDF cenových ponúk
+  uploads/items/               fotky položiek, názov = kód položky
+  mail/                        vygenerované .eml v testovacom režime (MAIL_MODE=file)
 ```
 
 ---
 
-## 6. Čo doplniť ako ďalšie
-
-1. **Zmenšovanie fotiek pri nahratí** — dnes sa ukladá originál. Bez natívneho modulu
-   to ide cez `<canvas>` v prehliadači ešte pred odoslaním.
-2. **Inventúrny režim na tablete** — načítať regál, odklikať skutočný stav.
-3. **Čiarové kódy** — kód položky do Code128, výdaj skenerom namiesto klikania.
-4. **Prepojenie na `cal-esd-db`** — položky ako momentový skrutkovač či posuvné meradlo
-   podliehajú kalibrácii; stačí do `items` doplniť `cal_device_id` a odkazovať sa.
-5. **Export žiadanky do PDF** pre podpis pri výdaji, ak to bude auditor chcieť.
-
----
-
-Demo kontakty dodávateľov sú fiktívne (`@example.com`). Pred ostrým nasadením prepíš
-`src/seed.js` alebo naplň tabuľky vlastnými dátami.
+Demo kontakty dodávateľov aj používateľov sú fiktívne (`@example.com`). Pred ostrým
+nasadením s `AUTH_MODE=entra` musí `users.email` sedieť s reálnym firemným Entra
+kontom (`@newayselectronics.com`/`.ai`) — bez zhody sa používateľ neprihlási, aj keď
+je v Entra platný. Prepíš `backend/app/seed.py` alebo naplň tabuľky vlastnými dátami.

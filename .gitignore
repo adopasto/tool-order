@@ -1,3 +1,15 @@
 node_modules/
 data/
 *.log
+
+# backend (FastAPI)
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+
+# frontend (Next.js)
+frontend/.next/
+frontend/next-env.d.ts
+frontend/.env.local
+frontend/tsconfig.tsbuildinfo
