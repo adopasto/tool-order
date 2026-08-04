@@ -1,16 +1,14 @@
 # Objednávky náradia
 
-Interný „eshop" pre výrobu: výroba si nakúpi do košíka, odošle žiadanku, vedúci ju schváli,
+Interný „eshop" pre výrobu: výroba si nakúpi do košíka, odošle žiadanku, nadriadený ju schváli,
 sklad vydá. Systém drží prehľad, koľko náradia a materiálu je k dispozícii, a sám hlási,
 keď je čo doobjednať.
 
 **Žiadanky sú interné – medzi výrobou a skladom.** Objednávky u dodávateľov vystavuje iné
 oddelenie; tento systém im pripraví len podklad (zoznam, CSV, e-mail).
 
-Backend: **FastAPI** (Python), databáza SQLite cez stdlib `sqlite3` (žiadny natívny modul,
-žiadny ORM). Frontend: **Next.js** (App Router, TypeScript) — server-rendered stránky +
-Server Actions pre formuláre. Rovnaký vzhľad a správanie ako pôvodná verzia (Express + EJS),
-len na modernejšom stacku.
+Backend: **FastAPI** (Python), databáza SQLite cez stdlib `sqlite3`. Frontend: **Next.js** (App Router, TypeScript) — server-rendered stránky +
+Server Actions pre formuláre. Rovnaký vzhľad a správanie ako pôvodná verzia (Express + EJS).
 
 ---
 
